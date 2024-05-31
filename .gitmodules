@@ -1,0 +1,6 @@
+[submodule "submodules/BPFocket"]
+	path = submodules/BPFocket
+	url = https://github.com/jhleeeme/BPFocket.git
+[submodule "submodules/IPCplusplus"]
+	path = submodules/IPCplusplus
+	url = https://github.com/jhleeeme/IPCplusplus.git
