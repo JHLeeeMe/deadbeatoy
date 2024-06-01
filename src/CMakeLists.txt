@@ -10,10 +10,8 @@ file(GLOB_RECURSE SRC_G
 file(GLOB_RECURSE HDR_G
     ${CMAKE_SOURCE_DIR}/include/*.h
     ${CMAKE_SOURCE_DIR}/include/*.hpp
-    ${CMAKE_SOURCE_DIR}/submodules/BPFocket/include/*.h
-    ${CMAKE_SOURCE_DIR}/submodules/BPFocket/include/*.hpp
-    ${CMAKE_SOURCE_DIR}/submodules/IPCplusplus/include/*.h
-    ${CMAKE_SOURCE_DIR}/submodules/IPCplusplus/include/*.hpp
+    ${CMAKE_SOURCE_DIR}/submodules/*/include/*.h
+    ${CMAKE_SOURCE_DIR}/submodules/*/include/*.hpp
 )
 
 # Create Target
