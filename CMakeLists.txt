@@ -18,10 +18,9 @@ set(CMAKE_DEBUG_POSTFIX "_d")
 set(CMAKE_RELWITHDEBINFO_POSTFIX "_rd")
 
 # Add sub dir
-add_subdirectory(src/)
 if(UNIX AND NOT APPLE)
-    #add_subdirectory(src/)
-    #add_subdirectory(test/)
+    add_subdirectory(src/)
+    add_subdirectory(test/)
     #add_subdirectory(sample/)
 endif()
 
