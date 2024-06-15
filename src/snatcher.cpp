@@ -1,118 +1,74 @@
 /// src/snatcher.cpp
 ///
 
-#include <optional>
-
 #include "snatcher.h"
 
-int quit = 0;
-
-void signal_handler(int)
+SysvMQueueBuilder::SysvMQueueBuilder()
+    : key_{ 255 }
+    , perm_{ sysv::mq::ePermission::RWR_R_ }
+    , payload_max_size_{ 128 }
 {
-    quit = 1;
 }
 
-auto create_MQueue(sysv::mq::ePermission perm, const size_t buf_size)
-        -> std::optional<sysv::mq::MQueue>;
-auto create_BPFapture(const bool promisc)
-        -> std::pair<bpfapture::utils::eResultCode, bpfapture::core::BPFapture>;
-auto print_eth_hdr(const struct ether_header& eth_hdr) -> void;
-auto print_ip_hdr(const struct ip& ip_hdr) -> void;
-
-int main()
+auto SysvMQueueBuilder::create_key(
+    const std::string& dir_path, const uint8_t proj_id) -> std::optional<key_t>
 {
-    ::signal(SIGINT, &signal_handler);
-
-    namespace bpf_utils  = bpfapture::utils;
-    namespace bpf_filter = bpfapture::filter;
-    namespace bpf_core   = bpfapture::core;
-
-    auto [code, sock] = create_BPFapture(true);
-    if (code != bpf_utils::eResultCode::Success)
+    const int key = sysv::utils::create_key(dir_path, proj_id);
+    if (key == -1)
     {
-        std::cerr << "[Error Code: " << static_cast<uint32_t>(code) << "]"
-                  << "[errno: "      << sock.err() << "]"
-                  << std::endl;
-        return 2;
+        return std::nullopt;
     }
 
-    std::vector<uint8_t> buf(sock.mtu());
+    return key;
+}
 
-    auto mqueue_opt{ create_MQueue(sysv::mq::ePermission::RWRWRW, buf.size()) };
-    if (!mqueue_opt.has_value())
+auto SysvMQueueBuilder::set_key(const key_t key) -> SysvMQueueBuilder&
+{
+    key_ = key;
+    return *this;
+}
+
+auto SysvMQueueBuilder::set_permission(const sysv::mq::ePermission perm)
+        -> SysvMQueueBuilder&
+{
+    perm_ = perm;
+    return *this;
+}
+
+auto SysvMQueueBuilder::set_payload_max_size(const size_t size)
+        -> SysvMQueueBuilder&
+{
+    payload_max_size_ = size;
+    return *this;
+}
+
+auto SysvMQueueBuilder::build() const -> sysv::mq::MQueue
+{
+    return sysv::mq::MQueue(key_, perm_, payload_max_size_);
+}
+
+auto create_MQueue(const sysv::mq::ePermission perm, const size_t buf_size)
+        -> std::optional<sysv::mq::MQueue>
+{
+    const key_t key{ sysv::utils::create_key("./", 1) };
+    if (key < 0)
     {
-        return 1;
+        return std::nullopt;
     }
 
-    sysv::mq::MQueue mqueue{ std::move(mqueue_opt.value()) };
-    const long mtype = 1;
-
-    ssize_t received_bytes = 0;
-
-    constexpr int kMaxCnt = 10;
-    int max_cnt = kMaxCnt;
-    while (!quit && max_cnt--)
+    try
     {
-        received_bytes = sock.receive(buf.data(), buf.size());
-        if (received_bytes < 0)
-        {
-            std::cerr << "[errno: " << sock.err() << "]" << std::endl;
-            return 3;
-        }
-
-        std::cout << "received_bytes: " << received_bytes << '\n';
-
-        std::string buf_str{ buf.begin(), buf.begin() + received_bytes };
-
-        auto eth_hdr{ reinterpret_cast<struct ether_header*>(buf.data()) };
-        print_eth_hdr(*eth_hdr);
-
-        // Get upper layer protocol type (L3 Type)
-        //uint16_t eth_type{ ntohs(eth_hdr->ether_type) };
-
-        auto l3_pos{ buf.data() + sizeof(struct ether_header) };
-        auto ip_hdr{ reinterpret_cast<struct ip*>(l3_pos) };
-        print_ip_hdr(*ip_hdr);
-
-        // Set payload of layer 3
-        //const uint8_t* payload{ l3_pos + (ip_hdr->ip_hl * 4) };
-
-        // Print TCP or UDP Header
-        switch (ip_hdr->ip_p)
-        {
-        case IPPROTO_TCP:
-            if (mqueue.send(buf_str, mtype) < 0)
-            //if (mqueue.send_nowait(buf_str, mtype) < 0)
-            {
-                std::cerr << "[errno: " << mqueue.err() << "]" << std::endl;
-            }
-
-            /*
-            tcp_hdr = reinterpret_cast<struct tcphdr*>(payload);
-            print_tcp_hdr(tcp_hdr);
-            break;
-            */
-        case IPPROTO_UDP:
-            /*
-            udp_hdr = reinterpret_cast<struct udphdr*>(payload);
-            print_udp_hdr(udp_hdr);
-            break;
-            */
-        default:
-            break;
-        }
+        return sysv::mq::MQueue(key, perm, buf_size);
     }
-
-    for (size_t i = 0; i < kMaxCnt; i++)
+    catch (const std::runtime_error& e)
     {
-        if (mqueue.receive(mtype) < 0)
-        {
-            std::cerr << "[errno: " << mqueue.err() << "]" << std::endl;
-        }
-
-        std::cout << mqueue.msg() << '\n';
+        std::cerr << e.what() << std::endl;
+        return std::nullopt;
     }
-    return 0;
+    catch (...)
+    {
+        return std::nullopt;
+    }
 }
 
 auto create_BPFapture(const bool promisc)
@@ -124,8 +80,8 @@ auto create_BPFapture(const bool promisc)
 
     bpf_core::BPFapture sock{ true };
 
-    bpf_utils::eResultCode result_code{};
-    result_code = sock.set_filter({ bpf_filter::eProtocolID::Ip });
+    bpf_utils::eResultCode result_code{
+        sock.set_filter({ bpf_filter::eProtocolID::Ip }) };
     if (result_code != bpf_utils::eResultCode::Success)
     {
         if (sock.err() != 0)
@@ -163,28 +119,4 @@ auto print_ip_hdr(const struct ip& ip_hdr) -> void
     printf("\tL4 type    : %d\n", ip_hdr.ip_p);
     printf("\tSrc Address: %s\n", inet_ntoa(ip_hdr.ip_src));
     printf("\tDst Address: %s\n", inet_ntoa(ip_hdr.ip_dst));
-}
-
-auto create_MQueue(sysv::mq::ePermission perm, const size_t buf_size)
-        -> std::optional<sysv::mq::MQueue>
-{
-    const key_t key{ sysv::utils::create_key("./", 1) };
-    if (key < 0)
-    {
-        return std::nullopt;
-    }
-
-    try
-    {
-        return sysv::mq::MQueue(key, perm, buf_size);
-    }
-    catch (const std::runtime_error& e)
-    {
-        std::cerr << e.what() << std::endl;
-        return std::nullopt;
-    }
-    catch (...)
-    {
-        return std::nullopt;
-    }
 }

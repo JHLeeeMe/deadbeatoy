@@ -17,9 +17,21 @@ file(GLOB_RECURSE HDR_G
 foreach(SRC ${SRC_G})
     get_filename_component(SRC_NAME ${SRC} NAME_WE)
 
+    if(NOT ${SRC_NAME} MATCHES ".*_main$")
+        continue()
+    endif()
+
+    string(REGEX REPLACE "_main$" "" BASE_NAME ${SRC_NAME})
+    set(RELATED_SRC "${CMAKE_CURRENT_SOURCE_DIR}/${BASE_NAME}.cpp")
+
+    set(SRC_LIST ${SRC})
+    if(EXISTS ${RELATED_SRC})
+        list(APPEND SRC_LIST ${RELATED_SRC})
+    endif()
+
     # Create Target
     add_executable(${SRC_NAME}
-        ${SRC}
+        ${SRC_LIST}
         ${HDR_G}
     )
 
