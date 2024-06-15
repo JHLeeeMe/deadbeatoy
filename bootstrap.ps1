@@ -7,5 +7,5 @@ docker run `
     --net=host `
     --cap-add=NET_ADMIN `
     --name deadbeatoy `
-    jhleeeme/cpp:dev-alpine `
+    jhleeeme/cpp:dev `
     bin/bash
